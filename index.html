@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Talk to Me — English Practice</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#131313">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap">
+</head>
+<body>
+
+<!-- BRAND MARK -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<defs>
+    <linearGradient id="gradEmerald" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffcfc4"/>
+      <stop offset="100%" stop-color="#e2725b"/>
+    </linearGradient>
+    <linearGradient id="gradEmeraldSoft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c5cdc9"/>
+      <stop offset="100%" stop-color="#8f9c96"/>
+    </linearGradient>
+    <filter id="iconShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+<!-- Logo: concentric echo rings -->
+  <symbol id="i-logo" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="3.2" fill="url(#gradEmerald)"/>
+    <path d="M7 12a5 5 0 0 1 5-5" stroke="url(#gradEmerald)" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    <path d="M4.2 12a7.8 7.8 0 0 1 7.8-7.8" stroke="url(#gradEmerald)" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.65"/>
+    <path d="M1.6 12A10.4 10.4 0 0 1 12 1.6" stroke="url(#gradEmerald)" stroke-width="1.4" fill="none" stroke-linecap="round" opacity="0.4"/>
+  </symbol>
+</svg>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<div class="app-shell single-page">
+
+  <main class="main-content">
+
+    <!-- ============ TOPBAR ============ -->
+    <header class="top-bar">
+      <div class="topbar-logo" id="topbar-logo">
+        <span class="logo-icon"><svg class="icon icon-logo"><use href="#i-logo"/></svg></span>
+        <span class="logo-text">Talk to Me</span>
+      </div>
+      <button class="topbar-back hidden" id="topbar-back-btn" title="Volver">
+        <span class="msi">arrow_back</span>
+      </button>
+      <div class="top-bar-actions">
+        <span class="lv-chip" id="lv-chip" title="Tu nivel">
+          <span class="msi">star</span> LV. <span id="lv-num">1</span>
+        </span>
+        <button class="topbar-icon-btn accent-btn" id="ai-btn" title="Asistente IA">
+          <span class="msi">bolt</span> AI
+        </button>
+        <button class="topbar-icon-btn avatar-btn" id="profile-btn" title="Perfil">
+          <span class="msi">person</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ============ HOME (Dictado / Pronunciación) ============ -->
+    <section class="section active" id="home-section">
+      <div class="home-greeting">
+        <div class="home-greeting-row">
+          <div class="home-greeting-col">
+            <div class="home-greeting-label">BIENVENIDO</div>
+            <h1 class="home-greeting-title">Hola, <span id="home-username">Tu nombre</span></h1>
+          </div>
+          <div class="home-record">
+            <div class="home-record-label">TU RÉCORD</div>
+            <div class="home-record-val"><span id="home-record-wpm">0</span> <span class="home-record-unit">WPM</span> <span class="home-record-crown">👑</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ TOOLBAR: modo + duración ============ -->
+      <div class="dictado-toolbar-row" id="dictado-toolbar-row">
+        <div class="mode-switcher-wrap" id="mode-switcher-wrap">
+          <button class="mode-switcher-btn" id="mode-switcher-btn" type="button">
+            <span class="msi" id="mode-switcher-icon">keyboard_voice</span>
+            <span id="mode-switcher-label">Dictado</span>
+            <span class="msi mode-chevron">expand_more</span>
+          </button>
+          <div class="mode-dropdown hidden" id="mode-dropdown">
+            <button class="mode-dropdown-item active" data-module="dictado" type="button">
+              <span class="msi">keyboard_voice</span> Dictado
+            </button>
+            <button class="mode-dropdown-item" data-module="pronun" type="button">
+              <span class="msi">graphic_eq</span> Pronunciación
+            </button>
+          </div>
+        </div>
+
+        <div class="duration-row" id="duration-row">
+          <div class="duration-chips">
+            <button class="dur-chip" data-dur="15" type="button">15s</button>
+            <button class="dur-chip" data-dur="30" type="button">30s</button>
+            <button class="dur-chip" data-dur="60" type="button">60s</button>
+          </div>
+          <button class="dur-chip dur-chip-free active" data-dur="free" type="button">Free</button>
+        </div>
+      </div>
+
+      <!-- ============ MÓDULO: DICTADO ============ -->
+      <div class="module-panel active" id="module-dictado">
+        <div class="dictado-card">
+          <div class="time-counter">TIME <span id="dictado-timer">00:00</span></div>
+          <button class="mic-btn-circle" id="mic-btn"><span class="msi msi-mic-lg">mic</span></button>
+          <div class="wave-bars" id="wave-bars">
+            <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+            <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+            <div class="bar"></div><div class="bar"></div>
+          </div>
+          <div class="mic-status" id="mic-status">Toca para hablar</div>
+          <div class="transcript-box" id="transcript-box">
+            <span id="transcript-final"></span><span class="interim" id="transcript-interim"></span>
+          </div>
+        </div>
+
+        <div class="dictado-actions">
+          <button class="btn btn-ghost btn-sm" id="btn-delete-last"><span class="msi">backspace</span> Delete last</button>
+          <button class="btn btn-ghost btn-sm" id="btn-clear"><span class="msi">delete_sweep</span> Clear</button>
+          <button class="btn btn-accent btn-sm" id="btn-save-dictado"><span class="msi">save</span> Guardar como tarjeta</button>
+        </div>
+
+        <!-- Session summary — words / wpm / fluency -->
+        <div class="dictado-summary hidden" id="dictado-summary">
+          <div class="summary-stats-grid">
+            <div class="summary-stat">
+              <div class="summary-stat-label">WORDS</div>
+              <div class="summary-stat-val" id="sum-words">0</div>
+            </div>
+            <div class="summary-stat">
+              <div class="summary-stat-label">WPM</div>
+              <div class="summary-stat-val" id="sum-wpm">0</div>
+            </div>
+            <div class="summary-stat">
+              <div class="summary-stat-label">FLUENCY</div>
+              <div class="summary-stat-val" id="sum-fluency">0%</div>
+            </div>
+          </div>
+          <div class="record-banner hidden" id="record-banner">
+            <span class="msi">emoji_events</span> <span id="record-banner-text">New Record!</span> <span class="msi">emoji_events</span>
+          </div>
+        </div>
+
+        <div class="dynamic-prompt">
+          <div class="prompt-label"><span class="msi">bolt</span> SPEAKING SPARK</div>
+          <div class="prompt-phrase" id="prompt-phrase">Click para obtener una frase...</div>
+          <button class="btn btn-ghost btn-sm" id="prompt-refresh">↻ Another phrase</button>
+        </div>
+
+        <div class="sugg-wrap">
+          <div class="sugg-label"><span class="msi">lightbulb</span> SUGGESTIONS</div>
+          <div class="sugg-chips" id="sugg-chips"></div>
+        </div>
+      </div>
+
+      <!-- ============ MÓDULO: PRONUNCIACIÓN ============ -->
+      <div class="module-panel" id="module-pronun">
+        <div class="pronun-layout">
+          <div class="pronun-select-area">
+            <label class="form-label">SELECCIONAR TARJETA</label>
+            <select id="pronun-phrase-select" class="input-field select"></select>
+          </div>
+
+          <div class="recog-stage" id="recog-stage">
+            <div class="recog-original" id="recog-original">
+              <span class="recog-text blurred" id="recog-text-display">Selecciona una tarjeta para comenzar</span>
+            </div>
+            <button class="btn btn-ghost btn-sm" id="pronun-show-btn"><span class="msi">visibility</span> Mostrar frase</button>
+
+            <div class="pronun-audio-label" id="pronun-audio-label">
+              <span class="msi">record_voice_over</span> Audio de referencia (nativo)
+            </div>
+            <div id="pronun-audio-wrap" class="mt-md"></div>
+            <div class="pronun-audio-upload hidden" id="pronun-audio-upload">
+              <label class="btn btn-ghost btn-sm" for="pronun-audio-file"><span class="msi">upload_file</span> Subir audio de referencia</label>
+              <input type="file" id="pronun-audio-file" accept="audio/*" class="hidden">
+            </div>
+
+            <div class="pronun-controls">
+              <button class="btn btn-accent-lg" id="pronun-start-btn"><span class="msi msi-mic-lg">mic</span></button>
+            </div>
+            <div class="pronun-cta-label" id="pronun-cta-label">
+              <div class="pronun-cta-title">Tap to record</div>
+              <div class="pronun-cta-sub">Listen, then speak clearly</div>
+            </div>
+            <button class="btn btn-ghost hidden" id="pronun-stop-btn"><span class="msi">stop_circle</span> Parar y analizar</button>
+
+            <div class="listening-state hidden" id="listening-state">
+              <span class="rec-dot"></span> Escuchando...
+            </div>
+
+            <div class="pronun-live-wrap hidden" id="pronun-live-wrap">
+              <div class="pronun-live-label"><span class="msi">hearing</span> Lo que entendí</div>
+              <div class="pronun-live-box" id="pronun-live-box">
+                <span id="pronun-live-text"></span><span class="interim" id="pronun-live-interim"></span>
+              </div>
+            </div>
+
+            <div class="pronun-analyzing hidden" id="pronun-analyzing">
+              <span class="msi spin">progress_activity</span> Analizando tu pronunciación...
+            </div>
+
+            <div class="pronun-results hidden" id="pronun-results">
+              <div class="pronun-float-card">
+                <div class="pronun-float-title"><span class="msi">flag</span> PRONUNCIATION ANALYSIS</div>
+                <div class="pronun-float-text" id="pronun-float-text"></div>
+                <div class="score-section" id="score-section">
+                  <div class="score-ring-wrap">
+                    <svg class="score-ring" viewBox="0 0 120 120">
+                      <circle cx="60" cy="60" r="50" fill="none" stroke="var(--surface2)" stroke-width="10" stroke-dasharray="6 7"/>
+                      <circle cx="60" cy="60" r="50" fill="none" stroke="var(--accent)" stroke-width="10"
+                        stroke-dasharray="314" stroke-dashoffset="314" stroke-linecap="round"
+                        id="score-circle-arc" transform="rotate(-90 60 60)"/>
+                    </svg>
+                    <span class="score-num" id="score-num">0%</span>
+                  </div>
+                  <div class="score-label">PRONUNCIATION SCORE</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PROFILE SCREEN ============ -->
+    <section class="section" id="profile-section">
+      <div class="profile-layout">
+        <div class="profile-card">
+          <div class="profile-avatar"><span class="msi">emoji_events</span></div>
+          <div class="profile-name" id="profile-name-display">Tu nombre</div>
+          <div class="profile-title"><span class="msi">military_tech</span> <span id="profile-title-text">Language Enthusiast</span></div>
+
+          <div class="xp-bar-wrap">
+            <div class="xp-bar-track"><div class="xp-bar-fill" id="xp-bar-fill"></div></div>
+            <div class="xp-bar-label">
+              Progress to Level <span id="xp-next-level">2</span>
+              &nbsp;·&nbsp;<span id="xp-current">0</span> / <span id="xp-target">1000</span> XP
+            </div>
+          </div>
+          <div class="profile-tagline" id="profile-tagline">Cada práctica te acerca a la fluidez.</div>
+        </div>
+
+        <div class="metrics-section">
+          <div class="metrics-title">PERFORMANCE METRICS</div>
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <div class="metric-icon"><span class="msi">speed</span></div>
+              <div class="metric-val" id="metric-best-wpm">0 WPM</div>
+              <div class="metric-label">Best Score</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-icon"><span class="msi">hub</span></div>
+              <div class="metric-val" id="metric-fluency">0%</div>
+              <div class="metric-label">Fluency</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-group-title"><span class="msi">tune</span> Ajustes</div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-name">Tu nombre</div>
+              <div class="setting-desc">Así te saludará la app</div>
+            </div>
+            <input type="text" id="cfg-username" class="input-field" placeholder="Tu nombre" style="max-width:150px">
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-name">Recordatorio diario</div>
+              <div class="setting-desc">Una notificación para practicar</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="cfg-notif">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-name">Hora</div>
+            </div>
+            <input type="time" id="cfg-notif-time" class="input-field time-input">
+          </div>
+          <div style="padding:14px 20px;">
+            <button class="btn btn-accent" id="profile-save-btn" style="width:100%;">Guardar cambios</button>
+          </div>
+        </div>
+
+     <div class="settings-group">
+  <div class="settings-group-title"><span class="msi">info</span> Acerca de</div>
+  <div class="about-text" style="padding: 14px 18px;">
+    <p><b>Talk to Me</b> English Speaking Practice</p>
+    <p style="font-size: 12px; color: var(--text3);">
+      <span class="msi" style="font-size: 14px;">code</span> Ing. Erwin Patiño Flores
+      <span style="margin: 0 6px;">·</span>
+      <span class="msi" style="font-size: 14px;">copyright</span> 2026
+    </p>
+    <p style="font-size: 11px; color: var(--text3); margin-top: 4px;">
+      v1.1 · Hecho con <span style="color: var(--accent);">♥</span>
+    </p>
+  </div>
+</div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- FAB — crear tarjeta manualmente -->
+<button class="fab-create" id="fab-create-mazo" title="Crear tarjeta">
+  <span class="msi">post_add</span>
+</button>
+
+<!-- CREATE TARJETA MODAL -->
+<div class="modal-overlay hidden" id="tarjeta-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Nueva tarjeta</h3>
+      <button class="modal-close" id="tarjeta-modal-close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Frase para practicar</label>
+        <textarea id="tarjeta-text-input" class="input-field" rows="4" placeholder="Escribe la frase que quieres poder practicar/hablar..."></textarea>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="tarjeta-use-dictado-btn" type="button">
+        <span class="msi">content_paste</span> Usar texto dictado actual
+      </button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="tarjeta-cancel-btn">Cancelar</button>
+      <button class="btn btn-accent" id="tarjeta-create-btn">Crear tarjeta</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
