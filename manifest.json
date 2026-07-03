@@ -1,7 +1,7 @@
 {
   "name": "Talk to Me — English Practice",
   "short_name": "Talk to Me",
-  "description": "Aprende inglés con dictado y práctica de pronunciación",
+  "description": "Learn English with dictation and pronunciation practice",
   "start_url": "/index.html",
   "display": "standalone",
   "background_color": "#121316",
@@ -22,6 +22,6 @@
     }
   ],
   "categories": ["education", "productivity"],
-  "lang": "es",
+  "lang": "en",
   "dir": "ltr"
 }

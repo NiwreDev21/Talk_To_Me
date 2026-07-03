@@ -47,11 +47,15 @@ const LEVEL_TITLES = [
 ];
 
 const TAGLINES = [
-  'Cada práctica te acerca a la fluidez.',
-  'Tu progreso es sólido y constante.',
+  'Every practice brings you closer to fluency.',
+  'Your progress is solid and consistent.',
   'Your climb is steady and impressive.',
-  'Estás muy cerca del siguiente nivel.',
+  "You're very close to the next level.",
 ];
+
+// Duration modes tracked independently. 'free' has no time limit.
+const DURATION_MODES = ['15', '30', '60', '120', 'free'];
+const DURATION_LABELS = { '15': '15 seconds', '30': '30 seconds', '60': '60 seconds', '120': '120 seconds', free: 'Free' };
 
 // ============ INDEXEDDB ============
 let db;
@@ -59,7 +63,7 @@ let db;
 function openDB() {
   return new Promise((res, rej) => {
     if (db) return res(db);
-    const req = indexedDB.open('EchoDB', 3);
+    const req = indexedDB.open('EchoDB', 4);
     req.onupgradeneeded = e => {
       const d = e.target.result;
       if (!d.objectStoreNames.contains('phrases')) {
@@ -81,6 +85,10 @@ function openDB() {
       }
       if (!d.objectStoreNames.contains('cfg')) {
         d.createObjectStore('cfg', { keyPath: 'id' });
+      }
+      if (!d.objectStoreNames.contains('sessions')) {
+        const ss = d.createObjectStore('sessions', { keyPath: 'id', autoIncrement: true });
+        ss.createIndex('byDate', 'created');
       }
     };
     req.onsuccess = e => { db = e.target.result; res(db); };
@@ -133,6 +141,15 @@ function idbGetByIndex(store, index, value) {
   }));
 }
 
+function idbClear(store) {
+  return openDB().then(d => new Promise((res, rej) => {
+    const tx = d.transaction(store, 'readwrite');
+    const r = tx.objectStore(store).clear();
+    r.onsuccess = () => res();
+    r.onerror = () => rej(r.error);
+  }));
+}
+
 async function saveAudioBlob(phraseId, role, blob, name) {
   const existing = await getAudioRecord(phraseId, role);
   if (existing) await idbDelete('audio', existing.id);
@@ -149,19 +166,25 @@ function blobURL(blob) {
 }
 
 // ============ STATE ============
-let state = {
-  currentModule: 'dictado',
-  currentScreen: 'home', // 'home' | 'profile'
-  phrases: [],
-  mazos: {},
-  stats: {
+function freshStats() {
+  return {
     sessions: 0, minutes: 0,
     avgPronun: 0, pronunCount: 0,
     streak: 0, lastDate: null,
     bestWPM: 0, bestFluency: 0, wordsTotal: 0,
     xp: 0,
-  },
-  cfg: { notifEnabled: false, notifTime: '09:00', userName: 'Tu nombre' },
+    bestWPMByMode: { '15': 0, '30': 0, '60': 0, '120': 0, free: 0 },
+    sessionsByMode: { '15': 0, '30': 0, '60': 0, '120': 0, free: 0 },
+  };
+}
+
+let state = {
+  currentModule: 'dictado',
+  currentScreen: 'home', // 'home' | 'profile' | 'historial' | 'tarjetas'
+  phrases: [],
+  mazos: {},
+  stats: freshStats(),
+  cfg: { notifEnabled: false, notifTime: '09:00', userName: 'Your name', focusMode: false },
   pronun: { phraseId: null, recognition: null, listening: false },
   dictado: { recognition: null, active: false, finalText: '', currentPhrase: '', duration: 'free' },
 };
@@ -178,7 +201,7 @@ function toast(msg, type = 'info', duration = 3000) {
   el.innerHTML = `
     <span class="toast-icon-wrap"><span class="msi">${TOAST_ICONS[type] || TOAST_ICONS.info}</span></span>
     <span class="toast-msg"></span>
-    <button class="toast-close" aria-label="Cerrar" type="button">×</button>
+    <button class="toast-close" aria-label="Close" type="button">×</button>
     <span class="toast-progress" style="animation-duration:${duration}ms"></span>
   `;
   el.querySelector('.toast-msg').textContent = msg;
@@ -195,6 +218,40 @@ function toast(msg, type = 'info', duration = 3000) {
   el.querySelector('.toast-close').addEventListener('click', dismiss);
   setTimeout(dismiss, duration);
 }
+
+// ============ GENERIC CONFIRM MODAL ============
+let confirmResolver = null;
+
+function askConfirm(title, text, okLabel) {
+  document.getElementById('confirm-modal-title').textContent = title;
+  document.getElementById('confirm-modal-text').textContent = text;
+  const okBtn = document.getElementById('confirm-modal-ok');
+  okBtn.textContent = okLabel || 'Confirm';
+  document.getElementById('confirm-modal').classList.remove('hidden');
+  return new Promise(resolve => { confirmResolver = resolve; });
+}
+
+function closeConfirmModal(result) {
+  document.getElementById('confirm-modal').classList.add('hidden');
+  if (confirmResolver) { confirmResolver(result); confirmResolver = null; }
+}
+
+document.getElementById('confirm-modal-ok').addEventListener('click', () => closeConfirmModal(true));
+document.getElementById('confirm-modal-cancel').addEventListener('click', () => closeConfirmModal(false));
+document.getElementById('confirm-modal-close').addEventListener('click', () => closeConfirmModal(false));
+document.getElementById('confirm-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('confirm-modal')) closeConfirmModal(false);
+});
+
+// ============ HELP MODAL ============
+function openHelpModal() { document.getElementById('help-modal').classList.remove('hidden'); }
+function closeHelpModal() { document.getElementById('help-modal').classList.add('hidden'); }
+document.getElementById('sidebar-help-btn').addEventListener('click', openHelpModal);
+document.getElementById('help-modal-close').addEventListener('click', closeHelpModal);
+document.getElementById('help-modal-ok').addEventListener('click', closeHelpModal);
+document.getElementById('help-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('help-modal')) closeHelpModal();
+});
 
 // ============ AUDIO PLAYER COMPONENT ============
 function createAudioPlayer(blob, opts = {}) {
@@ -315,7 +372,7 @@ function createAudioPlayer(blob, opts = {}) {
   return api;
 }
 
-// ============ NAVIGATION (mode switcher: Dictado / Pronunciación) ============
+// ============ NAVIGATION (mode switcher: Dictation / Pronunciation) ============
 function switchModule(mod) {
   document.querySelectorAll('.module-panel').forEach(s => s.classList.remove('active'));
   const el = document.getElementById('module-' + mod);
@@ -326,9 +383,15 @@ function switchModule(mod) {
   stopPronun();
 
   renderModeSwitcher();
+  renderSidebarNav();
 
   const durationRow = document.getElementById('duration-row');
   if (durationRow) durationRow.classList.toggle('hidden', mod !== 'dictado');
+
+  // Pronunciation is a focused practice view: hide the greeting banner and
+  // the free-mode record chip, which only make sense in Dictation.
+  const greeting = document.getElementById('home-greeting');
+  if (greeting) greeting.classList.toggle('hidden', mod === 'pronun');
 
   if (mod === 'pronun') populatePronunSelect();
 }
@@ -338,13 +401,13 @@ function renderModeSwitcher() {
   const label = document.getElementById('mode-switcher-label');
   if (state.currentModule === 'dictado') {
     if (icon) icon.textContent = 'keyboard_voice';
-    if (label) label.textContent = 'Dictado';
+    if (label) label.textContent = 'Dictation';
   } else {
     if (icon) icon.textContent = 'graphic_eq';
-    if (label) label.textContent = 'Pronunciación';
+    if (label) label.textContent = 'Pronunciation';
   }
   document.querySelectorAll('.mode-dropdown-item').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.module === state.currentModule);
+    if (btn.dataset.module) btn.classList.toggle('active', btn.dataset.module === state.currentModule);
   });
 }
 
@@ -355,20 +418,43 @@ function toggleModeDropdown(force) {
   dd.classList.toggle('hidden', !show);
 }
 
-// ============ SCREEN NAVIGATION (home <-> profile) ============
+// ============ DESKTOP SIDEBAR NAV STATE ============
+function renderSidebarNav() {
+  document.querySelectorAll('.sidebar-nav-item').forEach(btn => {
+    const nav = btn.dataset.nav;
+    let isActive = false;
+    if (nav === 'dictado' || nav === 'pronun') {
+      isActive = state.currentScreen === 'home' && state.currentModule === nav;
+    } else {
+      isActive = state.currentScreen === nav;
+    }
+    btn.classList.toggle('active', isActive);
+  });
+}
+
+// ============ SCREEN NAVIGATION (home / profile / historial / tarjetas) ============
 function goToScreen(screen) {
   state.currentScreen = screen;
   document.getElementById('home-section').classList.toggle('active', screen === 'home');
   document.getElementById('profile-section').classList.toggle('active', screen === 'profile');
+  document.getElementById('historial-section').classList.toggle('active', screen === 'historial');
+  document.getElementById('tarjetas-section').classList.toggle('active', screen === 'tarjetas');
   document.getElementById('topbar-back-btn').classList.toggle('hidden', screen === 'home');
   document.getElementById('topbar-logo').classList.toggle('hidden', screen !== 'home');
-  document.getElementById('fab-create-mazo').classList.toggle('hidden', screen !== 'home');
+  document.getElementById('fab-create-mazo').classList.toggle('hidden', screen !== 'home' && screen !== 'tarjetas');
 
-  if (screen === 'profile') {
+  if (screen === 'home') {
+    stopPronun();
+  } else {
     stopDictado();
     stopPronun();
-    renderProfileScreen();
   }
+
+  if (screen === 'profile') renderProfileScreen();
+  if (screen === 'historial') renderHistorialScreen();
+  if (screen === 'tarjetas') renderTarjetasScreen();
+
+  renderSidebarNav();
 }
 
 // ============ DATA / GREETING ============
@@ -378,22 +464,81 @@ async function loadData() {
   state.mazos = {};
   for (const m of mazoRecords) state.mazos[m.id] = m.phraseIds || [];
   const statsRec = await idbGet('stats', 'main');
-  if (statsRec) state.stats = { ...state.stats, ...statsRec };
+  if (statsRec) {
+    state.stats = { ...freshStats(), ...statsRec };
+    state.stats.bestWPMByMode = { ...freshStats().bestWPMByMode, ...(statsRec.bestWPMByMode || {}) };
+    state.stats.sessionsByMode = { ...freshStats().sessionsByMode, ...(statsRec.sessionsByMode || {}) };
+    // Migrate legacy single bestWPM value into the free-mode slot if present.
+    if (statsRec.bestWPM && !statsRec.bestWPMByMode) {
+      state.stats.bestWPMByMode.free = statsRec.bestWPM;
+    }
+  }
   const cfgRec = await idbGet('cfg', 'main');
   if (cfgRec) state.cfg = { ...state.cfg, ...cfgRec };
   renderGreeting();
   renderLevelBadge();
   renderRecordBadge();
+  renderDesktopStats();
+  renderModeRecordLists();
+  applyFocusModeUI();
 }
 
 function renderGreeting() {
   const el = document.getElementById('home-username');
-  if (el) el.textContent = state.cfg.userName || 'Tu nombre';
+  if (el) el.textContent = state.cfg.userName || 'Your name';
 }
 
+// "Your Record" always reflects the Free-mode best WPM only.
 function renderRecordBadge() {
+  const val = (state.stats.bestWPMByMode && state.stats.bestWPMByMode.free) || 0;
   const el = document.getElementById('home-record-wpm');
-  if (el) el.textContent = state.stats.bestWPM || 0;
+  if (el) el.textContent = val;
+  const side = document.getElementById('side-record-wpm');
+  if (side) side.textContent = val;
+  const sub = document.getElementById('side-record-sub');
+  if (sub) sub.textContent = `${state.stats.sessions || 0} sessions completed`;
+}
+
+// ============ DESKTOP SIDEBAR STATS (real data only, desktop/tablet view) ============
+function renderDesktopStats() {
+  const words = document.getElementById('side-stat-words');
+  const wpm = document.getElementById('side-stat-wpm');
+  const fluency = document.getElementById('side-stat-fluency');
+  const pronun = document.getElementById('side-stat-pronun');
+  const sessions = document.getElementById('side-stat-sessions');
+  if (words) words.textContent = state.stats.wordsTotal || 0;
+  if (wpm) wpm.textContent = (state.stats.bestWPMByMode && state.stats.bestWPMByMode.free) || 0;
+  if (fluency) fluency.textContent = (state.stats.bestFluency || 0) + '%';
+  if (pronun) pronun.textContent = (state.stats.avgPronun || 0) + '%';
+  if (sessions) sessions.textContent = state.stats.sessions || 0;
+}
+
+// ============ PER-MODE RECORD LISTS (Profile + Sidebar) ============
+function modeRecordRowsHTML() {
+  return DURATION_MODES.map(mode => {
+    const val = (state.stats.bestWPMByMode && state.stats.bestWPMByMode[mode]) || 0;
+    return `<div class="duration-record-row">
+      <span class="duration-record-label">${DURATION_LABELS[mode]}</span>
+      <span class="duration-record-val">${val > 0 ? val + ' WPM' : '—'}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderModeRecordLists() {
+  const profileList = document.getElementById('duration-records-list');
+  if (profileList) profileList.innerHTML = modeRecordRowsHTML();
+
+  const sidebarList = document.getElementById('sidebar-duration-records-list');
+  if (sidebarList) sidebarList.innerHTML = modeRecordRowsHTML();
+
+  const mini = document.getElementById('sidebar-records-mini-list');
+  if (mini) {
+    mini.innerHTML = DURATION_MODES.map(mode => {
+      const val = (state.stats.bestWPMByMode && state.stats.bestWPMByMode[mode]) || 0;
+      const short = mode === 'free' ? 'Free' : mode + 's';
+      return `<div class="sidebar-records-mini-row"><span>${short}</span><span>${val > 0 ? val : '—'}</span></div>`;
+    }).join('');
+  }
 }
 
 // ============ XP / LEVEL SYSTEM ============
@@ -413,7 +558,7 @@ async function addXP(amount) {
   await idbPut('stats', { id: 'main', ...state.stats });
   const after = getLevelInfo().level;
   renderLevelBadge();
-  if (after > before) toast(`¡Subiste a nivel ${after}! 🎉`, 'success');
+  if (after > before) toast(`You reached level ${after}! 🎉`, 'success');
 }
 
 function renderLevelBadge() {
@@ -424,7 +569,7 @@ function renderLevelBadge() {
 
 function renderProfileScreen() {
   const { xp, level, xpIntoLevel, pct, title } = getLevelInfo();
-  document.getElementById('profile-name-display').textContent = state.cfg.userName || 'Tu nombre';
+  document.getElementById('profile-name-display').textContent = state.cfg.userName || 'Your name';
   document.getElementById('profile-title-text').textContent = title;
   document.getElementById('xp-bar-fill').style.width = pct + '%';
   document.getElementById('xp-current').textContent = xpIntoLevel;
@@ -432,37 +577,308 @@ function renderProfileScreen() {
   document.getElementById('xp-next-level').textContent = level + 1;
   document.getElementById('profile-tagline').textContent = TAGLINES[Math.min(TAGLINES.length - 1, Math.floor(pct / 30))];
 
-  document.getElementById('metric-best-wpm').textContent = `${state.stats.bestWPM || 0} WPM`;
+  document.getElementById('metric-best-wpm').textContent = `${(state.stats.bestWPMByMode && state.stats.bestWPMByMode.free) || 0} WPM`;
   document.getElementById('metric-fluency').textContent = `${state.stats.bestFluency || 0}%`;
 
-  document.getElementById('cfg-username').value = state.cfg.userName || 'Tu nombre';
+  document.getElementById('cfg-username').value = state.cfg.userName || 'Your name';
   document.getElementById('cfg-notif').checked = !!state.cfg.notifEnabled;
   document.getElementById('cfg-notif-time').value = state.cfg.notifTime || '09:00';
+
+  renderModeRecordLists();
+  renderStorageInfo();
 }
 
 async function saveProfileSettings() {
   const name = document.getElementById('cfg-username').value.trim();
-  state.cfg.userName = name || 'Tu nombre';
+  state.cfg.userName = name || 'Your name';
   state.cfg.notifEnabled = document.getElementById('cfg-notif').checked;
   state.cfg.notifTime = document.getElementById('cfg-notif-time').value || '09:00';
   await idbPut('cfg', { id: 'main', ...state.cfg });
   renderGreeting();
   renderProfileScreen();
-  toast('Perfil actualizado', 'success');
+  toast('Profile updated', 'success');
 }
 
-// ============ PRONUNCIACIÓN ============
+// ============ DATA & STORAGE (Profile) ============
+function fmtBytes(bytes) {
+  if (!bytes || bytes <= 0) return '0 KB';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let i = 0;
+  let v = bytes;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+async function renderStorageInfo() {
+  const usedEl = document.getElementById('storage-used-val');
+  const quotaEl = document.getElementById('storage-quota-val');
+  const fillEl = document.getElementById('storage-bar-fill');
+  if (!usedEl || !quotaEl) return;
+
+  if (navigator.storage && navigator.storage.estimate) {
+    try {
+      const { usage, quota } = await navigator.storage.estimate();
+      usedEl.textContent = fmtBytes(usage);
+      quotaEl.textContent = fmtBytes(quota);
+      if (fillEl) {
+        const pct = quota ? Math.min(100, (usage / quota) * 100) : 0;
+        fillEl.style.width = pct + '%';
+      }
+      return;
+    } catch (e) { /* fall through */ }
+  }
+  usedEl.textContent = 'Not available';
+  quotaEl.textContent = 'Not available';
+  if (fillEl) fillEl.style.width = '0%';
+}
+
+async function exportAllData() {
+  try {
+    const [phrases, mazos, statsRec, cfgRec, sessions, audioRecords] = await Promise.all([
+      idbGetAll('phrases'), idbGetAll('mazos'), idbGet('stats', 'main'),
+      idbGet('cfg', 'main'), idbGetAll('sessions'), idbGetAll('audio'),
+    ]);
+
+    const audioB64 = await Promise.all(audioRecords.map(rec => new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ ...rec, blob: undefined, blobData: reader.result });
+      reader.readAsDataURL(rec.blob);
+    })));
+
+    const payload = {
+      app: 'talk-to-me', version: 2, exportedAt: Date.now(),
+      phrases, mazos, stats: statsRec, cfg: cfgRec, sessions, audio: audioB64,
+    };
+
+    const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `talk-to-me-backup-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast('Backup exported', 'success');
+  } catch (e) {
+    console.error(e);
+    toast('Could not export data', 'error');
+  }
+}
+
+function dataURLToBlob(dataURL) {
+  const [meta, b64] = dataURL.split(',');
+  const mime = /data:(.*);base64/.exec(meta)?.[1] || 'application/octet-stream';
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+async function importAllData(file) {
+  try {
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    if (!payload || payload.app !== 'talk-to-me') {
+      toast('This file is not a valid backup', 'error');
+      return;
+    }
+
+    await Promise.all(['phrases', 'mazos', 'audio', 'sessions'].map(idbClear));
+
+    for (const p of payload.phrases || []) await idbPut('phrases', p);
+    for (const m of payload.mazos || []) await idbPut('mazos', m);
+    for (const s of payload.sessions || []) await idbPut('sessions', s);
+    for (const a of payload.audio || []) {
+      const blob = a.blobData ? dataURLToBlob(a.blobData) : null;
+      const rec = { ...a };
+      delete rec.blobData;
+      rec.blob = blob;
+      await idbPut('audio', rec);
+    }
+    if (payload.stats) await idbPut('stats', { ...payload.stats, id: 'main' });
+    if (payload.cfg) await idbPut('cfg', { ...payload.cfg, id: 'main' });
+
+    await loadData();
+    populatePronunSelect();
+    renderTarjetasScreen();
+    renderHistorialScreen();
+    toast('Data restored successfully', 'success');
+  } catch (e) {
+    console.error(e);
+    toast('Could not restore this backup', 'error');
+  }
+}
+
+async function eraseAllData() {
+  await Promise.all(['phrases', 'mazos', 'audio', 'sessions', 'stats', 'cfg'].map(idbClear));
+  state.stats = freshStats();
+  state.cfg = { notifEnabled: false, notifTime: '09:00', userName: 'Your name', focusMode: false };
+  state.phrases = [];
+  state.mazos = {};
+  finalText = '';
+  document.getElementById('transcript-final').textContent = '';
+  await loadData();
+  populatePronunSelect();
+  renderTarjetasScreen();
+  renderHistorialScreen();
+  toast('All data erased', 'success');
+}
+
+document.getElementById('btn-export-data').addEventListener('click', exportAllData);
+document.getElementById('restore-file-input').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const ok = await askConfirm('Restore data?', 'This will replace your current cards, stats and sessions with the contents of the backup file.', 'Restore');
+  if (ok) await importAllData(file);
+  e.target.value = '';
+});
+document.getElementById('btn-clear-all-data').addEventListener('click', async () => {
+  const ok = await askConfirm('Erase all data?', 'This permanently deletes every card, session, stat and setting stored on this device. This cannot be undone.', 'Erase everything');
+  if (ok) await eraseAllData();
+});
+
+// ============ SESSIONS / HISTORY ============
+async function logSession(entry) {
+  await idbPut('sessions', { created: Date.now(), ...entry });
+  state.stats.sessions = (state.stats.sessions || 0) + 1;
+}
+
+function timeAgo(ts) {
+  const diff = Date.now() - ts;
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const days = Math.floor(hr / 24);
+  return `${days}d ago`;
+}
+
+async function renderHistorialScreen() {
+  const list = document.getElementById('historial-list');
+  const sessions = (await idbGetAll('sessions')).sort((a, b) => b.created - a.created);
+  if (!sessions.length) {
+    list.innerHTML = '<div class="empty-state">No sessions yet. Start practicing to build your history!</div>';
+  } else {
+    list.innerHTML = sessions.slice(0, 100).map(s => {
+      const isDictado = s.type === 'dictado';
+      const icon = isDictado ? 'keyboard_voice' : 'graphic_eq';
+      const title = isDictado ? `Dictation · ${DURATION_LABELS[s.mode] || s.mode}` : 'Pronunciation practice';
+      const sub = s.text ? s.text.slice(0, 70) : '';
+      const metric = isDictado ? `${s.wpm} WPM` : `${s.score}%`;
+      return `<div class="historial-item">
+        <div class="historial-item-icon"><span class="msi">${icon}</span></div>
+        <div class="historial-item-body">
+          <div class="historial-item-title">${title}</div>
+          <div class="historial-item-sub">${sub}</div>
+        </div>
+        <div class="historial-item-right">
+          <div class="historial-item-metric">${metric}</div>
+          <div class="historial-item-time">${timeAgo(s.created)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  renderRecentActivitySidebar(sessions.slice(0, 5));
+}
+
+function renderRecentActivitySidebar(sessions) {
+  const el = document.getElementById('sidebar-activity-list');
+  if (!el) return;
+  if (!sessions || !sessions.length) {
+    el.innerHTML = '<div class="sidebar-activity-empty">No sessions yet</div>';
+    return;
+  }
+  el.innerHTML = sessions.map(s => {
+    const isDictado = s.type === 'dictado';
+    const icon = isDictado ? 'keyboard_voice' : 'graphic_eq';
+    const title = isDictado ? `Dictation (${DURATION_LABELS[s.mode] || s.mode})` : 'Pronunciation';
+    const metric = isDictado ? `${s.wpm} WPM` : `${s.score}%`;
+    return `<div class="sidebar-activity-item">
+      <div class="sidebar-activity-icon"><span class="msi">${icon}</span></div>
+      <div class="sidebar-activity-info">
+        <div class="sidebar-activity-title">${title}</div>
+        <div class="sidebar-activity-time">${timeAgo(s.created)}</div>
+      </div>
+      <div class="sidebar-activity-metric">${metric}</div>
+    </div>`;
+  }).join('');
+}
+
+// Keep the sidebar's recent activity fresh even without visiting History.
+idbGetAll ? null : null; // no-op guard (kept for diff clarity)
+
+// ============ TARJETAS / CARDS SCREEN ============
+function renderTarjetasScreen() {
+  const grid = document.getElementById('tarjetas-grid');
+  if (!grid) return;
+  if (!state.phrases.length) {
+    grid.innerHTML = '<div class="empty-state">No cards yet. Create one to get started!</div>';
+    return;
+  }
+  grid.innerHTML = '';
+  state.phrases.slice().reverse().forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'tarjeta-card';
+    const created = p.created ? new Date(p.created).toLocaleDateString() : '';
+    card.innerHTML = `
+      <div class="tarjeta-card-text"></div>
+      <div class="tarjeta-card-meta">${created}</div>
+      <div class="tarjeta-card-actions">
+        <button class="btn btn-ghost btn-sm tarjeta-practice-btn" type="button"><span class="msi">graphic_eq</span> Practice</button>
+        <button class="btn btn-ghost btn-sm tarjeta-delete-btn" type="button" title="Delete"><span class="msi">delete</span></button>
+      </div>`;
+    card.querySelector('.tarjeta-card-text').textContent = p.text;
+    card.querySelector('.tarjeta-practice-btn').addEventListener('click', () => {
+      switchModule('pronun');
+      goToScreen('home');
+      setTimeout(() => {
+        const sel = document.getElementById('pronun-phrase-select');
+        sel.value = p.id;
+        loadPronunPhrase(p.id);
+      }, 0);
+    });
+    card.querySelector('.tarjeta-delete-btn').addEventListener('click', async () => {
+      const ok = await askConfirm('Delete this card?', 'This phrase and any reference audio linked to it will be removed.', 'Delete');
+      if (!ok) return;
+      await idbDelete('phrases', p.id);
+      state.phrases = state.phrases.filter(x => x.id !== p.id);
+      for (const [mazoId, ids] of Object.entries(state.mazos)) {
+        state.mazos[mazoId] = ids.filter(id => id !== p.id);
+        await idbPut('mazos', { id: mazoId, phraseIds: state.mazos[mazoId] });
+      }
+      renderTarjetasScreen();
+      populatePronunSelect();
+      toast('Card deleted', 'success');
+    });
+    grid.appendChild(card);
+  });
+}
+
+// ============ PRONUNCIATION ============
 let recognition = null;
 let pronunNativeBlob = null;
 let pronunFinalText = '';
+let pronunTextVisible = false; // tracks Show/Hide state for the whole session on the current card
+
+function setPronunShowBtnLabel(visible) {
+  const btn = document.getElementById('pronun-show-btn');
+  if (!btn) return;
+  if (visible) {
+    btn.innerHTML = '<span class="msi">visibility_off</span> Hide Text';
+  } else {
+    btn.innerHTML = '<span class="msi">visibility</span> Show Text';
+  }
+}
 
 async function populatePronunSelect() {
   const sel = document.getElementById('pronun-phrase-select');
-  sel.innerHTML = '<option value="">— Seleccionar tarjeta —</option>';
+  sel.innerHTML = '<option value="">— Select card —</option>';
   for (const p of state.phrases) {
     const opt = document.createElement('option');
     opt.value = p.id;
-    opt.textContent = p.title || p.text?.slice(0, 40) || 'Sin título';
+    opt.textContent = p.title || p.text?.slice(0, 40) || 'Untitled';
     sel.appendChild(opt);
   }
   if (state.pronun.phraseId) {
@@ -478,8 +894,9 @@ async function loadPronunPhrase(phraseId) {
 
   const textEl = document.getElementById('recog-text-display');
   textEl.textContent = phrase.text || '';
+  pronunTextVisible = false;
   textEl.classList.add('blurred');
-  document.getElementById('pronun-show-btn').innerHTML = '<span class="msi">visibility</span> Mostrar frase';
+  setPronunShowBtnLabel(false);
   document.getElementById('pronun-show-btn').style.display = '';
   document.getElementById('pronun-start-btn').disabled = false;
 
@@ -508,31 +925,32 @@ function resetPronunResults() {
   document.getElementById('pronun-cta-label').classList.remove('hidden');
   document.getElementById('pronun-stop-btn').classList.add('hidden');
   document.getElementById('listening-state').classList.add('hidden');
+  document.querySelector('.pronun-mic-stage')?.classList.remove('active');
 }
 
 document.getElementById('pronun-audio-file').addEventListener('change', async e => {
   const file = e.target.files[0];
   const phraseId = state.pronun.phraseId;
   if (!file || !phraseId) return;
-  await saveAudioBlob(phraseId, 'original', file, 'referencia');
+  await saveAudioBlob(phraseId, 'original', file, 'reference');
   pronunNativeBlob = file;
   const audioWrap = document.getElementById('pronun-audio-wrap');
   audioWrap.innerHTML = '';
   const player = createAudioPlayer(file, { showLoop: false });
   audioWrap.appendChild(player.el);
   document.getElementById('pronun-audio-upload').classList.add('hidden');
-  toast('Audio de referencia guardado', 'success');
+  toast('Reference audio saved', 'success');
 });
 
 async function startPronun() {
   const phraseId = state.pronun.phraseId;
-  if (!phraseId) { toast('Selecciona una tarjeta', 'error'); return; }
+  if (!phraseId) { toast('Select a card', 'error'); return; }
 
   const phrase = state.phrases.find(p => p.id === phraseId);
-  if (!phrase || !phrase.text) { toast('La tarjeta no tiene texto', 'error'); return; }
+  if (!phrase || !phrase.text) { toast('This card has no text', 'error'); return; }
 
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    toast('Tu navegador no soporta reconocimiento de voz. Usa Chrome.', 'error');
+    toast('Your browser does not support speech recognition. Use Chrome.', 'error');
     return;
   }
 
@@ -543,6 +961,7 @@ async function startPronun() {
   document.getElementById('pronun-start-btn').classList.add('hidden');
   document.getElementById('pronun-cta-label').classList.add('hidden');
   document.getElementById('pronun-stop-btn').classList.remove('hidden');
+  document.querySelector('.pronun-mic-stage')?.classList.add('active');
 
   const liveWrap = document.getElementById('pronun-live-wrap');
   const liveFinalEl = document.getElementById('pronun-live-text');
@@ -559,21 +978,21 @@ async function startPronun() {
   recognition.maxAlternatives = 1;
 
   recognition.onresult = e => {
-    let finalText = '';
+    let finalTextR = '';
     let interimText = '';
     for (let i = 0; i < e.results.length; i++) {
       const transcript = e.results[i][0].transcript;
-      if (e.results[i].isFinal) finalText += transcript + ' ';
+      if (e.results[i].isFinal) finalTextR += transcript + ' ';
       else interimText += transcript;
     }
-    pronunFinalText = finalText.trim();
+    pronunFinalText = finalTextR.trim();
     liveFinalEl.textContent = pronunFinalText;
     liveInterimEl.textContent = interimText;
   };
 
   recognition.onerror = e => {
     if (e.error !== 'no-speech' && e.error !== 'aborted') {
-      toast('Error de reconocimiento: ' + e.error, 'error');
+      toast('Recognition error: ' + e.error, 'error');
     }
   };
 
@@ -587,6 +1006,7 @@ function stopPronun() {
   document.getElementById('pronun-start-btn').classList.remove('hidden');
   document.getElementById('pronun-cta-label').classList.remove('hidden');
   document.getElementById('pronun-stop-btn').classList.add('hidden');
+  document.querySelector('.pronun-mic-stage')?.classList.remove('active');
 
   if (recognition) {
     try { recognition.stop(); } catch (e) {}
@@ -629,13 +1049,18 @@ async function analyzeFullPronunciation(original, spoken) {
   const overall = origWords.length > 0 ? Math.round((correct / origWords.length) * 100) : 0;
   renderPronunResults(overall);
 
-  // ---- Stats ----
+  // ---- Stats (per-session pronunciation accuracy; no global "record" shown here) ----
   state.stats.pronunCount = (state.stats.pronunCount || 0) + 1;
   const prevTotal = (state.stats.avgPronun || 0) * ((state.stats.pronunCount || 1) - 1);
   state.stats.avgPronun = Math.round((prevTotal + overall) / state.stats.pronunCount);
   if (overall > (state.stats.bestFluency || 0)) state.stats.bestFluency = overall;
   await idbPut('stats', { id: 'main', ...state.stats });
   await addXP(15);
+  renderDesktopStats();
+
+  await logSession({ type: 'pronun', score: overall, text: original });
+  if (state.currentScreen === 'historial') renderHistorialScreen();
+  else renderRecentActivitySidebar((await idbGetAll('sessions')).sort((a,b)=>b.created-a.created).slice(0,5));
 }
 
 function renderPronunResults(overall) {
@@ -674,6 +1099,18 @@ function getDurationMs() {
   const d = state.dictado.duration;
   if (d === 'free') return null;
   return Number(d) * 1000;
+}
+
+// Word counter is only meaningful (and only shown) for timed goals, not Free mode.
+function updateWordCounter() {
+  const wrap = document.getElementById('word-counter');
+  if (!wrap) return;
+  const isTimed = state.dictado.duration !== 'free';
+  wrap.classList.toggle('hidden', !isTimed);
+  if (isTimed) {
+    const words = finalText.trim() ? finalText.trim().split(/\s+/).filter(Boolean).length : 0;
+    document.getElementById('word-counter-val').textContent = words;
+  }
 }
 
 function startDictadoTimer() {
@@ -733,8 +1170,9 @@ function stopDictado() {
     dictadoRecognition = null;
   }
   document.getElementById('mic-btn').classList.remove('active');
+  document.querySelector('.mic-stage')?.classList.remove('active');
   document.getElementById('wave-bars').classList.remove('active');
-  document.getElementById('mic-status').textContent = 'Toca para hablar';
+  document.getElementById('mic-status').textContent = 'Tap to speak';
   stopDictadoTimer();
   setDurationChipsDisabled(false);
 
@@ -758,22 +1196,34 @@ async function finishDictadoSession() {
   document.getElementById('sum-wpm').textContent = wpm;
   document.getElementById('sum-fluency').textContent = fluency + '%';
 
+  // Each duration mode (15s / 30s / 60s / 120s / Free) keeps its own independent WPM record.
+  const modeKey = String(state.dictado.duration); // '15' | '30' | '60' | '120' | 'free'
+  if (!state.stats.bestWPMByMode) state.stats.bestWPMByMode = freshStats().bestWPMByMode;
+  const prevBestForMode = state.stats.bestWPMByMode[modeKey] || 0;
+
   const banner = document.getElementById('record-banner');
-  const prevBest = state.stats.bestWPM || 0;
-  if (prevBest > 0 && wpm > prevBest) {
-    document.getElementById('record-banner-text').textContent = `New Record! WPM: ${wpm}`;
+  if (prevBestForMode > 0 && wpm > prevBestForMode) {
+    document.getElementById('record-banner-text').textContent = `New Record! WPM: ${wpm} (${DURATION_LABELS[modeKey]})`;
     banner.classList.remove('hidden');
   } else {
     banner.classList.add('hidden');
   }
-  if (wpm > prevBest) state.stats.bestWPM = wpm;
+  if (wpm > prevBestForMode) state.stats.bestWPMByMode[modeKey] = wpm;
   if (fluency > (state.stats.bestFluency || 0)) state.stats.bestFluency = fluency;
 
   state.stats.wordsTotal = (state.stats.wordsTotal || 0) + words;
+  if (!state.stats.sessionsByMode) state.stats.sessionsByMode = freshStats().sessionsByMode;
+  state.stats.sessionsByMode[modeKey] = (state.stats.sessionsByMode[modeKey] || 0) + 1;
   state.stats.sessions = (state.stats.sessions || 0) + 1;
   await idbPut('stats', { id: 'main', ...state.stats });
   renderRecordBadge();
+  renderDesktopStats();
+  renderModeRecordLists();
   await addXP(10);
+
+  await logSession({ type: 'dictado', mode: modeKey, wpm, fluency, words, text: text.slice(0, 120) });
+  if (state.currentScreen === 'historial') renderHistorialScreen();
+  else renderRecentActivitySidebar((await idbGetAll('sessions')).sort((a,b)=>b.created-a.created).slice(0,5));
 }
 
 function createDictadoRecognition(sessionId) {
@@ -814,6 +1264,7 @@ function createDictadoRecognition(sessionId) {
           finalText += (finalText && !finalText.endsWith(' ') ? ' ' : '') + trimmed + ' ';
           document.getElementById('transcript-final').textContent = finalText;
           updateSuggestions(finalText);
+          updateWordCounter();
         }
       }
       sessionCommitted = sessionFinalNow;
@@ -844,12 +1295,21 @@ function toggleDictado() {
   }
 
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    toast('Reconocimiento de voz no disponible. Usa Chrome.', 'error');
+    toast('Speech recognition not available. Use Chrome.', 'error');
     return;
   }
 
+  // Fix: starting a new recording must fully clear any leftover transcript
+  // from a previous session, otherwise WPM keeps accumulating incorrectly.
+  finalText = '';
+  document.getElementById('transcript-final').textContent = '';
+  document.getElementById('transcript-interim').textContent = '';
+  document.getElementById('sugg-chips').innerHTML = '';
   document.getElementById('dictado-summary').classList.add('hidden');
+  document.getElementById('record-banner').classList.add('hidden');
+
   resetDictadoTimer();
+  updateWordCounter();
   startDictadoTimer();
   setDurationChipsDisabled(true);
 
@@ -859,8 +1319,9 @@ function toggleDictado() {
   dictadoRecognition.start();
   dictadoActive = true;
   document.getElementById('mic-btn').classList.add('active');
+  document.querySelector('.mic-stage')?.classList.add('active');
   document.getElementById('wave-bars').classList.add('active');
-  document.getElementById('mic-status').textContent = 'Escuchando... (toca para parar)';
+  document.getElementById('mic-status').textContent = 'Listening... (tap to stop)';
 }
 
 function updateSuggestions(text) {
@@ -883,6 +1344,7 @@ function updateSuggestions(text) {
     chip.addEventListener('click', () => {
       finalText += s + ' ';
       document.getElementById('transcript-final').textContent = finalText;
+      updateWordCounter();
     });
     chips.appendChild(chip);
   });
@@ -896,7 +1358,7 @@ function refreshPromptPhrase() {
 
 async function saveDictadoAsCard() {
   const text = finalText.trim();
-  if (!text) { toast('No hay texto para guardar', 'error'); return; }
+  if (!text) { toast('No text to save', 'error'); return; }
   const id = await idbPut('phrases', { text, title: text.slice(0, 40) + '...', trans: '', created: Date.now() });
   state.phrases.push({ id, text, title: text.slice(0,40) + '...', trans: '', created: Date.now() });
   const mazoId = 'general';
@@ -905,10 +1367,10 @@ async function saveDictadoAsCard() {
   state.mazos[mazoId] = phraseIds;
   await idbPut('mazos', { id: mazoId, phraseIds });
   await addXP(5);
-  toast('Guardado como tarjeta', 'success');
+  toast('Saved as card', 'success');
 }
 
-// ============ DURATION CHIPS (15s / 30s / 60s / Free) ============
+// ============ DURATION CHIPS (15s / 30s / 60s / 120s / Free) ============
 function setDurationChipsDisabled(disabled) {
   document.querySelectorAll('.dur-chip').forEach(btn => { btn.disabled = disabled; });
 }
@@ -919,12 +1381,14 @@ function selectDuration(dur) {
     btn.classList.toggle('active', btn.dataset.dur === String(dur));
   });
   resetDictadoTimer();
+  updateWordCounter();
 }
 
-// ============ CREAR TARJETA (FAB) ============
+// ============ CREATE CARD (FAB / Sidebar) ============
 function openTarjetaModal() {
   const text = finalText.trim();
   document.getElementById('tarjeta-text-input').value = text || '';
+  document.getElementById('tarjeta-modal').classList.remove('hidden');
 }
 
 function closeTarjetaModal() {
@@ -933,7 +1397,7 @@ function closeTarjetaModal() {
 
 async function createTarjeta() {
   const text = document.getElementById('tarjeta-text-input').value.trim();
-  if (!text) { toast('Escribe una frase para la tarjeta', 'error'); return; }
+  if (!text) { toast('Write a phrase for the card', 'error'); return; }
 
   const id = await idbPut('phrases', { text, title: text.slice(0, 40) + (text.length > 40 ? '...' : ''), trans: '', created: Date.now() });
   state.phrases.push({ id, text, title: text.slice(0,40) + (text.length > 40 ? '...' : ''), trans: '', created: Date.now() });
@@ -945,10 +1409,29 @@ async function createTarjeta() {
   await idbPut('mazos', { id: mazoId, phraseIds });
 
   await addXP(10);
-  toast('Tarjeta creada', 'success');
+  toast('Card created', 'success');
   closeTarjetaModal();
 
   if (state.currentModule === 'pronun') populatePronunSelect();
+  if (state.currentScreen === 'tarjetas') renderTarjetasScreen();
+}
+
+// ============ FOCUS MODE ============
+function applyFocusModeUI() {
+  const shell = document.querySelector('.app-shell');
+  const banner = document.getElementById('sidebar-focus-banner');
+  const sub = document.getElementById('focus-banner-sub');
+  const isOn = !!state.cfg.focusMode;
+  if (shell) shell.classList.toggle('focus-mode', isOn);
+  if (banner) banner.classList.toggle('active', isOn);
+  if (sub) sub.textContent = isOn ? 'Extra panels are hidden' : 'Hide extra panels while you practice';
+}
+
+async function toggleFocusMode() {
+  state.cfg.focusMode = !state.cfg.focusMode;
+  await idbPut('cfg', { id: 'main', ...state.cfg });
+  applyFocusModeUI();
+  toast(state.cfg.focusMode ? 'Focus mode on' : 'Focus mode off', 'info', 1600);
 }
 
 // ============ SERVICE WORKER ============
@@ -958,20 +1441,26 @@ if ('serviceWorker' in navigator) {
 
 // ============ EVENT LISTENERS ============
 document.getElementById('ai-btn').addEventListener('click', () => {
-  toast('Asistente IA — próximamente', 'info');
+  toast('AI Assistant — coming soon', 'info');
 });
 document.getElementById('profile-btn').addEventListener('click', () => goToScreen('profile'));
+document.getElementById('topbar-logo').addEventListener('click', () => goToScreen('home'));
 document.getElementById('topbar-back-btn').addEventListener('click', () => goToScreen('home'));
 document.getElementById('profile-save-btn').addEventListener('click', saveProfileSettings);
 
-// Mode switcher (Dictado / Pronunciación)
+// Mode switcher (Dictation / Pronunciation) — mobile dropdown
 document.getElementById('mode-switcher-btn').addEventListener('click', e => {
   e.stopPropagation();
   toggleModeDropdown();
 });
 document.querySelectorAll('.mode-dropdown-item').forEach(btn => {
   btn.addEventListener('click', () => {
-    switchModule(btn.dataset.module);
+    if (btn.dataset.module) {
+      switchModule(btn.dataset.module);
+      goToScreen('home');
+    } else if (btn.dataset.nav) {
+      goToScreen(btn.dataset.nav);
+    }
     toggleModeDropdown(false);
   });
 });
@@ -979,6 +1468,23 @@ document.addEventListener('click', e => {
   const wrap = document.getElementById('mode-switcher-wrap');
   if (wrap && !wrap.contains(e.target)) toggleModeDropdown(false);
 });
+
+// Desktop left sidebar — nav items, new card, help (previously non-functional)
+document.querySelectorAll('.sidebar-nav-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const nav = btn.dataset.nav;
+    if (nav === 'dictado' || nav === 'pronun') {
+      switchModule(nav);
+      goToScreen('home');
+    } else {
+      goToScreen(nav);
+    }
+  });
+});
+document.getElementById('sidebar-new-card-btn').addEventListener('click', openTarjetaModal);
+document.getElementById('sidebar-viewall-btn').addEventListener('click', () => goToScreen('historial'));
+document.getElementById('sidebar-focus-banner').addEventListener('click', toggleFocusMode);
+document.getElementById('tarjetas-new-btn').addEventListener('click', openTarjetaModal);
 
 // Duration chips
 document.querySelectorAll('.dur-chip').forEach(btn => {
@@ -988,21 +1494,15 @@ document.querySelectorAll('.dur-chip').forEach(btn => {
   });
 });
 
-// Pronunciación
+// Pronunciation
 document.getElementById('pronun-phrase-select').addEventListener('change', e => {
   if (e.target.value) loadPronunPhrase(parseInt(e.target.value));
 });
 document.getElementById('pronun-show-btn').addEventListener('click', () => {
   const textEl = document.getElementById('recog-text-display');
-  const btn = document.getElementById('pronun-show-btn');
-  const isBlurred = textEl.classList.contains('blurred');
-  if (isBlurred) {
-    textEl.classList.remove('blurred');
-    btn.innerHTML = '<span class="msi">visibility_off</span> Ocultar';
-  } else {
-    textEl.classList.add('blurred');
-    btn.innerHTML = '<span class="msi">visibility</span> Mostrar frase';
-  }
+  pronunTextVisible = !pronunTextVisible;
+  textEl.classList.toggle('blurred', !pronunTextVisible);
+  setPronunShowBtnLabel(pronunTextVisible);
 });
 
 // Dictado
@@ -1010,6 +1510,7 @@ document.getElementById('mic-btn').addEventListener('click', toggleDictado);
 document.getElementById('btn-delete-last').addEventListener('click', () => {
   finalText = finalText.trimEnd().split(' ').slice(0, -1).join(' ') + (finalText.trim() ? ' ' : '');
   document.getElementById('transcript-final').textContent = finalText;
+  updateWordCounter();
 });
 document.getElementById('btn-clear').addEventListener('click', () => {
   finalText = '';
@@ -1018,15 +1519,13 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   document.getElementById('sugg-chips').innerHTML = '';
   document.getElementById('dictado-summary').classList.add('hidden');
   resetDictadoTimer();
+  updateWordCounter();
 });
 document.getElementById('btn-save-dictado').addEventListener('click', saveDictadoAsCard);
 document.getElementById('prompt-refresh').addEventListener('click', refreshPromptPhrase);
 
-// FAB crear tarjeta
-document.getElementById('fab-create-mazo').addEventListener('click', () => {
-  openTarjetaModal();
-  document.getElementById('tarjeta-modal').classList.remove('hidden');
-});
+// FAB create card (mobile) — same behavior/design language as the desktop sidebar button
+document.getElementById('fab-create-mazo').addEventListener('click', openTarjetaModal);
 document.getElementById('tarjeta-modal-close').addEventListener('click', closeTarjetaModal);
 document.getElementById('tarjeta-cancel-btn').addEventListener('click', closeTarjetaModal);
 document.getElementById('tarjeta-create-btn').addEventListener('click', createTarjeta);
@@ -1046,12 +1545,14 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     finalText = finalText.trimEnd().split(' ').slice(0, -1).join(' ') + ' ';
     document.getElementById('transcript-final').textContent = finalText;
+    updateWordCounter();
   }
   if (e.ctrlKey && e.code === 'KeyL') {
     e.preventDefault();
     finalText = '';
     document.getElementById('transcript-final').textContent = '';
     document.getElementById('transcript-interim').textContent = '';
+    updateWordCounter();
   }
 });
 
@@ -1105,6 +1606,7 @@ async function init() {
   goToScreen('home');
   refreshPromptPhrase();
   generateIcons();
+  renderHistorialScreen();
 
   document.getElementById('sugg-chips').innerHTML = '';
   Object.values(AC).slice(0, 2).flat().slice(0, 5).forEach(s => {
@@ -1114,6 +1616,7 @@ async function init() {
     chip.addEventListener('click', () => {
       finalText += s + ' ';
       document.getElementById('transcript-final').textContent = finalText;
+      updateWordCounter();
     });
     document.getElementById('sugg-chips').appendChild(chip);
   });
