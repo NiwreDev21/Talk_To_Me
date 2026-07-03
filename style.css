@@ -485,7 +485,7 @@ textarea.input-field { resize: vertical; font-family: var(--font); line-height: 
 .score-num { position: absolute; font-size: 24px; font-weight: 800; font-family: var(--font-mono); color: var(--accent); text-shadow: var(--glow-sm); }
 .score-label { font-size: 11px; letter-spacing: 0.08em; color: var(--text3); font-weight: 700; }
 
-.dictado-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; justify-content: center; }
+.dictado-actions { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 20px; justify-content: center; }
 .dynamic-prompt { background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%); border: 1px solid var(--border2); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 16px; }
 .prompt-label { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; color: var(--accent); text-transform: uppercase; margin-bottom: 8px; }
 .prompt-phrase { font-size: 15px; color: var(--text2); line-height: 1.5; margin-bottom: 10px; }
@@ -579,14 +579,14 @@ textarea.input-field { resize: vertical; font-family: var(--font); line-height: 
 
 .duration-row {
   display: flex; align-items: center; gap: 8px; flex: 1;
-  justify-content: flex-end; flex-wrap: wrap;
+  justify-content: flex-end; flex-wrap: nowrap;
 }
 
 .duration-chips {
   display: flex; gap: 4px; background: var(--surface2);
   border: 1px solid var(--border); border-radius: var(--radius-full);
   padding: 4px; box-shadow: var(--shadow-inset);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .dur-chip {
@@ -1033,7 +1033,7 @@ textarea.input-field { resize: vertical; font-family: var(--font); line-height: 
 @media (min-width: 720px) {
   .top-bar { padding: 0 32px; }
   .section { padding: 32px 32px 48px; }
-  .home-greeting-title { font-size: 34px; }
+  .home-greeting-title { font-size: 32px; }
   .dictado-card { padding: 34px 28px 28px; }
   .mic-stage { width: 150px; height: 150px; }
   .mic-btn-circle { width: 88px; height: 88px; }
@@ -1115,9 +1115,9 @@ textarea.input-field { resize: vertical; font-family: var(--font); line-height: 
   .summary-stats-grid { padding: 14px 8px; }
 }
 
-@media (max-width: 380px) {
-  .mode-switcher-btn span:not(.msi) { font-size: 12.5px; }
-  .dur-chip { padding: 6px 9px; font-size: 11.5px; }
+@media (max-width: 480px) {
+  .mode-switcher-btn span:not(.msi) { font-size: 11.5px; }
+  .dur-chip { padding: 7px 9px; font-size: 10px; }
   .fab-create-label { display: none; }
   .fab-create { width: 54px; height: 54px; padding: 0; justify-content: center; border-radius: 16px; }
 }
