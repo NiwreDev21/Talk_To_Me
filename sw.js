@@ -1,9 +1,11 @@
-const CACHE_NAME = 'talktome-v1';
+
+const CACHE_NAME = 'talktome-v2';
 const ASSETS = [
   '/',
   '/index.html',
   '/style.css',
   '/app.js',
+  '/gemini-live.js',
   '/manifest.json'
 ];
 self.addEventListener('install', e => {
