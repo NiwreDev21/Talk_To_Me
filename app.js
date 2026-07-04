@@ -8,6 +8,7 @@
 
 // ============ CONSTANTS ============
 const PHRASE_BANK = [
+  // --- Prompts originales ---
   "These days, I'm pretty busy with my routine.",
   "Right now I'm just here, talking to myself.",
   "Today I want to talk about my daily routine.",
@@ -23,10 +24,44 @@ const PHRASE_BANK = [
   "One of my favorite things about learning English is the music.",
   "I want to improve my English so I can travel more.",
   "Let me tell you about my plans for this week.",
+
+  "Let me talk about a person who inspires me.",
+  "I want to explain how I usually spend my weekends.",
+  "Today I feel like talking about food, especially my favorite dish.",
+  "Let me describe the last trip I took, even if it was a short one.",
+  "I want to talk about a goal I'm working on right now.",
+  "Something I'd like to change about my daily routine is this.",
+  "Let me tell you about a habit I'm trying to build.",
+  "I want to talk about the city where I live.",
+  "Let me describe my job or what I study.",
+  "I want to talk about a mistake I made and what I learned from it.",
+  "Let me tell you about a book or show I really enjoyed.",
+  "I want to talk about how technology has changed my life.",
+  "Something that makes me nervous is speaking in public, but I'm practicing.",
+  "Let me describe a typical conversation I have with my family.",
+  "I want to talk about what motivates me to keep learning English.",
+  "Let me tell you three things I did today, in order.",
+  "I want to describe someone close to me and why they matter to me.",
+  "Let me talk about a problem I'm trying to solve these days.",
+  "I want to explain what a perfect day would look like for me.",
+  "Let me describe the weather today and how it affects my mood.",
+
+  // --- Plantillas con conectores (fill-in-the-blank) ---
   "I was _ but _ so I _ then _.",
-  "I think _ because _ also _ so_ ",
-  "I used to _ but now I _ because_ so_ ",
+  "I think _ because _ also _ so _",
+  "I used to _ but now I _ because _ so _",
   "the thing is _ so _ I mean _ that's why _",
+  "First _ then _ after that _ finally _",
+  "On one hand _ but on the other hand _ so in the end _",
+  "I remember _ and I felt _ because _ that's why _",
+  "Even though _ I still _ since _ so now _",
+  "Whenever I _ I usually _ because _ although _",
+  "If I could _ I would _ because _ but for now _",
+  "At first I thought _ but then I realized _ so _",
+  "I'm not sure _ but I think _ maybe _ we'll see _",
+  "It all started when _ then _ and eventually _",
+  "What I like about _ is _ especially because _",
+  "Compared to before, now I _ which means _",
 ];
 
 const AC = {
