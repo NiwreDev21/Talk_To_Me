@@ -46,8 +46,6 @@
 
 <div class="app-shell single-page">
 
-  <main class="main-content">
-
     <!-- ============ TOPBAR ============ -->
     <header class="top-bar">
       <div class="topbar-logo" id="topbar-logo">
@@ -70,18 +68,56 @@
       </div>
     </header>
 
+  <div class="app-body">
+
+  <!-- ============ DESKTOP LEFT SIDEBAR (nav) ============ -->
+  <aside class="app-sidebar" id="app-sidebar">
+    <button class="sidebar-new-card-btn" id="sidebar-new-card-btn" type="button">
+      <span class="msi">add_circle</span> New Card
+    </button>
+
+    <nav class="sidebar-nav">
+      <button class="sidebar-nav-item" data-nav="dictado" type="button">
+        <span class="msi">keyboard_voice</span> Dictation
+      </button>
+      <button class="sidebar-nav-item" data-nav="pronun" type="button">
+        <span class="msi">graphic_eq</span> Pronunciation
+      </button>
+      <button class="sidebar-nav-item" data-nav="historial" type="button">
+        <span class="msi">history</span> History
+      </button>
+      <button class="sidebar-nav-item" data-nav="tarjetas" type="button">
+        <span class="msi">style</span> Cards
+      </button>
+    </nav>
+
+    <div class="sidebar-spacer"></div>
+
+    <!-- Sidebar records-by-mode summary (desktop) -->
+    <div class="sidebar-records-mini" id="sidebar-records-mini">
+      <div class="sidebar-records-mini-title"><span class="msi">emoji_events</span> Records</div>
+      <div class="sidebar-records-mini-list" id="sidebar-records-mini-list"></div>
+    </div>
+
+    <button class="sidebar-help-btn" id="sidebar-help-btn" type="button">
+      <span class="msi">help</span> Help
+    </button>
+  </aside>
+
+  <main class="main-content">
+
     <!-- ============ HOME (Dictation / Pronunciation) ============ -->
     <section class="section active" id="home-section">
       <div class="home-layout">
       <div class="home-main-col">
-      <div class="home-greeting">
+      <div class="home-greeting" id="home-greeting">
         <div class="home-greeting-row">
           <div class="home-greeting-col">
             <div class="home-greeting-label">WELCOME</div>
             <h1 class="home-greeting-title">Hello, <span id="home-username">Your name</span></h1>
           </div>
-          <div class="home-record">
-            <div class="home-record-label">YOUR RECORD</div>
+          <div class="home-record" id="home-record">
+            <div class="home-record-label">YOUR RECORD <span class="home-record-tag">(free mode)</span></div>
             <div class="home-record-val"><span id="home-record-wpm">0</span> <span class="home-record-unit">WPM</span> <span class="home-record-crown">👑</span></div>
           </div>
         </div>
@@ -102,30 +138,70 @@
             <button class="mode-dropdown-item" data-module="pronun" type="button">
               <span class="msi">graphic_eq</span> Pronunciation
             </button>
+            <div class="mode-dropdown-divider"></div>
+            <button class="mode-dropdown-item" data-nav="historial" type="button">
+              <span class="msi">history</span> History
+            </button>
+            <button class="mode-dropdown-item" data-nav="tarjetas" type="button">
+              <span class="msi">style</span> Cards
+            </button>
           </div>
         </div>
 
-        <div class="duration-row" id="duration-row">
-          <div class="duration-chips">
-            <button class="dur-chip" data-dur="15" type="button">15s</button>
-            <button class="dur-chip" data-dur="30" type="button">30s</button>
-            <button class="dur-chip" data-dur="60" type="button">60s</button>
+      <div class="duration-row" id="duration-row">
+          <!-- Tablet / desktop: chips en línea -->
+          <div class="duration-inline" id="duration-inline">
+            <div class="duration-chips">
+              <button class="dur-chip" data-dur="15" type="button">15s</button>
+              <button class="dur-chip" data-dur="30" type="button">30s</button>
+              <button class="dur-chip" data-dur="60" type="button">60s</button>
+              <button class="dur-chip" data-dur="120" type="button">120s</button>
+            </div>
+            <button class="dur-chip dur-chip-free active" data-dur="free" type="button">Free</button>
           </div>
-          <button class="dur-chip dur-chip-free active" data-dur="free" type="button">Free</button>
+
+          <!-- Móvil: un solo botón "Time" desplegable -->
+          <div class="duration-dropdown-wrap" id="duration-dropdown-wrap">
+            <button class="duration-dropdown-btn" id="duration-dropdown-btn" type="button">
+              <span class="msi">timer</span>
+              <span id="duration-dropdown-label">Time: Free</span>
+              <span class="msi mode-chevron">expand_more</span>
+            </button>
+            <div class="duration-dropdown-menu hidden" id="duration-dropdown-menu">
+              <button class="dur-chip active" data-dur="free" type="button"><span class="msi">all_inclusive</span> Free (no limit)</button>
+              <button class="dur-chip" data-dur="15" type="button"><span class="msi">bolt</span> 15 seconds</button>
+              <button class="dur-chip" data-dur="30" type="button"><span class="msi">bolt</span> 30 seconds</button>
+              <button class="dur-chip" data-dur="60" type="button"><span class="msi">bolt</span> 60 seconds</button>
+              <button class="dur-chip" data-dur="120" type="button"><span class="msi">bolt</span> 120 seconds</button>
+            </div>
+          </div>
         </div>
       </div>
 
       <!-- ============ MODULE: DICTATION ============ -->
       <div class="module-panel active" id="module-dictado">
         <div class="dictado-card">
-          <div class="time-counter">TIME <span id="dictado-timer">00:00</span></div>
-          <button class="mic-btn-circle" id="mic-btn"><span class="msi msi-mic-lg">mic</span></button>
+          <div class="time-counter" id="time-counter-wrap">TIME <span id="dictado-timer">00:00</span></div>
+
+          <div class="mic-stage">
+            <div class="mic-ripple-ring r1"></div>
+            <div class="mic-ripple-ring r2"></div>
+            <div class="mic-ripple-ring r3"></div>
+            <button class="mic-btn-circle" id="mic-btn"><span class="msi msi-mic-lg">mic</span></button>
+          </div>
+
           <div class="wave-bars" id="wave-bars">
             <div class="bar"></div><div class="bar"></div><div class="bar"></div>
             <div class="bar"></div><div class="bar"></div><div class="bar"></div>
             <div class="bar"></div><div class="bar"></div>
           </div>
           <div class="mic-status" id="mic-status">Tap to speak</div>
+
+          <!-- Live word counter — only shown for timed modes, not Free -->
+          <div class="word-counter hidden" id="word-counter">
+            <span class="msi">speed</span> <span id="word-counter-val">0</span> words
+          </div>
+
           <div class="transcript-box" id="transcript-box">
             <span id="transcript-final"></span><span class="interim" id="transcript-interim"></span>
           </div>
@@ -194,7 +270,12 @@
             </div>
 
             <div class="pronun-controls">
-              <button class="btn btn-accent-lg" id="pronun-start-btn"><span class="msi msi-mic-lg">mic</span></button>
+              <div class="pronun-mic-stage">
+                <div class="mic-ripple-ring r1"></div>
+                <div class="mic-ripple-ring r2"></div>
+                <div class="mic-ripple-ring r3"></div>
+                <button class="btn-accent-lg" id="pronun-start-btn"><span class="msi msi-mic-lg">mic</span></button>
+              </div>
             </div>
             <div class="pronun-cta-label" id="pronun-cta-label">
               <div class="pronun-cta-title">Tap to record</div>
@@ -242,9 +323,15 @@
 
       <!-- ============ DESKTOP SIDEBAR: real stats (desktop/tablet only) ============ -->
       <aside class="home-sidebar-col" id="home-sidebar-col">
+        <div class="sidebar-record-card">
+          <div class="sidebar-stat-label">YOUR RECORD <span class="text3">(free mode)</span></div>
+          <div class="sidebar-record-val"><span id="side-record-wpm">0</span> <span class="home-record-unit">WPM</span> <span class="home-record-crown">👑</span></div>
+          <div class="sidebar-record-sub" id="side-record-sub">0 sessions completed</div>
+        </div>
+
         <div class="sidebar-stats-grid">
           <div class="sidebar-stat-card">
-            <div class="sidebar-stat-label">Total Words</div>
+            <div class="sidebar-stat-label">Words</div>
             <div class="sidebar-stat-val" id="side-stat-words">0</div>
           </div>
           <div class="sidebar-stat-card">
@@ -252,20 +339,69 @@
             <div class="sidebar-stat-val" id="side-stat-wpm">0</div>
           </div>
           <div class="sidebar-stat-card">
-            <div class="sidebar-stat-label">Best Fluency</div>
+            <div class="sidebar-stat-label">Fluency</div>
             <div class="sidebar-stat-val" id="side-stat-fluency">0%</div>
           </div>
           <div class="sidebar-stat-card">
-            <div class="sidebar-stat-label">Avg. Pronunciation</div>
+            <div class="sidebar-stat-label">Accuracy</div>
             <div class="sidebar-stat-val" id="side-stat-pronun">0%</div>
           </div>
         </div>
-        <div class="sidebar-sessions-card">
-          <div class="sidebar-stat-label">Sessions completed</div>
-          <div class="sidebar-stat-val" id="side-stat-sessions">0</div>
+
+        <!-- Per-mode WPM records (desktop sidebar) -->
+        <div class="sidebar-activity-card" id="sidebar-mode-records-card">
+          <div class="sidebar-activity-head">
+            <span class="sidebar-stat-label">Records by Mode</span>
+          </div>
+          <div class="duration-records-list" id="sidebar-duration-records-list" style="padding:0;"></div>
         </div>
+
+        <div class="sidebar-activity-card">
+          <div class="sidebar-activity-head">
+            <span class="sidebar-stat-label">Recent Activity</span>
+            <button class="sidebar-activity-viewall" id="sidebar-viewall-btn" type="button">View all</button>
+          </div>
+          <div class="sidebar-activity-list" id="sidebar-activity-list">
+            <div class="sidebar-activity-empty">No sessions yet</div>
+          </div>
+        </div>
+
+        <button class="sidebar-focus-banner" id="sidebar-focus-banner" type="button">
+          <span class="focus-banner-icon"><span class="msi">center_focus_strong</span></span>
+          <span class="focus-banner-text">
+            <span class="focus-banner-title">FOCUS MODE</span>
+            <span class="focus-banner-sub" id="focus-banner-sub">Hide extra panels while you practice</span>
+          </span>
+        </button>
       </aside>
       </div><!-- /home-layout -->
+    </section>
+
+    <!-- ============ HISTORY SCREEN ============ -->
+    <section class="section" id="historial-section">
+      <div class="historial-layout">
+        <h1 class="screen-title">History</h1>
+        <p class="screen-subtitle">Your recent dictation and pronunciation sessions.</p>
+        <div class="historial-list" id="historial-list">
+          <div class="empty-state">No sessions yet. Start practicing to build your history!</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ MY CARDS SCREEN ============ -->
+    <section class="section" id="tarjetas-section">
+      <div class="tarjetas-layout">
+        <div class="tarjetas-header-row">
+          <div>
+            <h1 class="screen-title">Cards</h1>
+            <p class="screen-subtitle">Phrases you've saved for practice.</p>
+          </div>
+          <button class="btn btn-accent" id="tarjetas-new-btn" type="button"><span class="msi">add</span> New Card</button>
+        </div>
+        <div class="tarjetas-grid" id="tarjetas-grid">
+          <div class="empty-state">No cards yet. Create one to get started!</div>
+        </div>
+      </div>
     </section>
 
     <!-- ============ PROFILE SCREEN ============ -->
@@ -300,6 +436,11 @@
               <div class="metric-label">Fluency</div>
             </div>
           </div>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-group-title"><span class="msi">emoji_events</span> Records by Duration</div>
+          <div class="duration-records-list" id="duration-records-list"></div>
         </div>
 
         <div class="settings-group">
@@ -360,6 +501,50 @@
           </div>
         </div>
 
+        <!-- ============ DATA MANAGEMENT ============ -->
+        <div class="settings-group">
+          <div class="settings-group-title"><span class="msi">database</span> Data &amp; Storage</div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-name">Storage used</div>
+              <div class="setting-desc">Estimated space used by your local data</div>
+            </div>
+            <div class="storage-val" id="storage-used-val">—</div>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-name">Storage available</div>
+              <div class="setting-desc">Maximum space your browser allows this app</div>
+            </div>
+            <div class="storage-val" id="storage-quota-val">—</div>
+          </div>
+          <div class="storage-bar-wrap">
+            <div class="storage-bar-track"><div class="storage-bar-fill" id="storage-bar-fill"></div></div>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-name">Backup your data</div>
+              <div class="setting-desc">Export cards, stats and settings to a file</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" id="btn-export-data"><span class="msi">download</span> Export</button>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-name">Restore your data</div>
+              <div class="setting-desc">Import a previously exported backup file</div>
+            </div>
+            <label class="btn btn-ghost btn-sm" for="restore-file-input"><span class="msi">upload</span> Restore</label>
+            <input type="file" id="restore-file-input" accept="application/json" class="hidden">
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-name">Erase all data</div>
+              <div class="setting-desc">Permanently delete cards, stats, audio and settings</div>
+            </div>
+            <button class="btn btn-danger btn-sm" id="btn-clear-all-data"><span class="msi">delete_forever</span> Erase</button>
+          </div>
+        </div>
+
  <div class="settings-group">
   <div class="settings-group-title"><span class="msi">info</span> About</div>
   <div class="about-text" style="padding: 16px 18px;">
@@ -406,11 +591,13 @@
     </section>
 
   </main>
+  </div><!-- /app-body -->
 </div>
 
 <!-- FAB — manually create card -->
 <button class="fab-create" id="fab-create-mazo" title="Create card">
   <span class="msi">post_add</span>
+  <span class="fab-create-label">New Card</span>
 </button>
 
 <!-- CREATE CARD MODAL -->
@@ -432,6 +619,54 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" id="tarjeta-cancel-btn">Cancel</button>
       <button class="btn btn-accent" id="tarjeta-create-btn">Create card</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL (generic — used for erase all data / restore) -->
+<div class="modal-overlay hidden" id="confirm-modal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 id="confirm-modal-title">Are you sure?</h3>
+      <button class="modal-close" id="confirm-modal-close">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="confirm-modal-text" id="confirm-modal-text">This action cannot be undone.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="confirm-modal-cancel">Cancel</button>
+      <button class="btn btn-danger" id="confirm-modal-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- HELP MODAL -->
+<div class="modal-overlay hidden" id="help-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><span class="msi">help</span> Help &amp; Tips</h3>
+      <button class="modal-close" id="help-modal-close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="help-item">
+        <div class="help-item-title"><span class="msi">keyboard_voice</span> Dictation</div>
+        <div class="help-item-desc">Tap the mic and speak freely, or pick a timed goal (15/30/60/120s) to test your speaking speed. Each timed mode keeps its own best WPM record.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-title"><span class="msi">graphic_eq</span> Pronunciation</div>
+        <div class="help-item-desc">Select a saved card, listen to the reference audio if available, then record yourself. We'll compare your words to the original.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-title"><span class="msi">style</span> Cards</div>
+        <div class="help-item-desc">Save phrases you want to practice. Use them later in Pronunciation mode.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-title"><span class="msi">bolt</span> Space bar</div>
+        <div class="help-item-desc">While on the Dictation screen, press Space to start/stop recording, Backspace to remove the last word, and Ctrl+L to clear everything.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-accent" id="help-modal-ok" style="width:100%;">Got it</button>
     </div>
   </div>
 </div>

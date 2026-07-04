@@ -1,4 +1,3 @@
-
 const CACHE_NAME = 'talktome-v2';
 const ASSETS = [
   '/',
