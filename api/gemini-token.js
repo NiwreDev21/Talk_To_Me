@@ -1,7 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 
 // ⚠️ CAMBIAR esto por tu dominio real de Vercel antes de deployar
-const ALLOWED_ORIGIN = 'https://TU-DOMINIO-REAL.vercel.app';
+const ALLOWED_ORIGIN = 'https://talk-to-me-pro.vercel.app';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
