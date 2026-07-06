@@ -1203,18 +1203,65 @@ function normalizeForOverlap(w) {
   return w.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+// ---- Solape entre sesiones de reconocimiento de voz ----
+// Chrome en Android no respeta continuous:true de forma real: la sesión de
+// reconocimiento se corta (onend) en cada pausa natural del habla, mucho más
+// seguido que en Desktop. Esto genera "costuras" entre el final de una
+// sesión y el arranque de la siguiente, y justo ahí es donde a veces la
+// transcripción cambia una o dos palabras respecto a la sesión anterior.
+//
+// Paso 1 (comparación exacta) es el código original, sin tocar: en Desktop,
+// donde las sesiones casi no se reinician, este sigue siendo el único
+// camino que se ejecuta en la práctica.
+//
+// Paso 2 (fallback difuso) solo entra en juego cuando el exacto ya falló,
+// que en la práctica ocurre casi únicamente en el punto de costura en
+// móvil. Exige que la mayoría de la ventana coincida (umbral 70%), para no
+// confundir una repetición real del usuario con un solape de costura.
 function stripDictadoOverlap(existingText, newWordsArr) {
   const existingWords = existingText.trim().split(/\s+/).filter(Boolean).map(normalizeForOverlap);
   const newWordsNorm = newWordsArr.map(normalizeForOverlap);
   const maxOverlap = Math.min(existingWords.length, newWordsNorm.length, 12);
+
+  // Paso 1 — coincidencia exacta (comportamiento original).
   for (let len = maxOverlap; len > 0; len--) {
-    const tail = existingWords.slice(-len).join(' ');
-    const head = newWordsNorm.slice(0, len).join(' ');
-    if (tail && tail === head) {
+    const tail = existingWords.slice(-len);
+    const head = newWordsNorm.slice(0, len);
+    if (tail.join(' ') === head.join(' ')) {
       return newWordsArr.slice(len);
     }
   }
+
+  // Paso 2 — fallback difuso (solo si el exacto no encontró nada).
+  for (let len = maxOverlap; len >= 3; len--) {
+    const tail = existingWords.slice(-len);
+    const head = newWordsNorm.slice(0, len);
+    let matches = 0;
+    for (let i = 0; i < len; i++) {
+      if (wordSimilar(tail[i], head[i])) matches++;
+    }
+    if (matches / len >= 0.7) {
+      return newWordsArr.slice(len);
+    }
+  }
+
   return newWordsArr;
+}
+
+// Compara dos palabras normalizadas tolerando pequeñas diferencias de
+// transcripción (ej. "talking" vs "talkin", o un carácter mal reconocido
+// en el borde de una costura de sesión).
+function wordSimilar(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (Math.abs(a.length - b.length) > 2) return false;
+  let diff = 0;
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    if (a[i] !== b[i]) diff++;
+    if (diff > 2) return false;
+  }
+  return true;
 }
 
 function stopDictado() {
