@@ -1207,21 +1207,24 @@ function normalizeForOverlap(w) {
 // Chrome en Android no respeta continuous:true de forma real: la sesión de
 // reconocimiento se corta (onend) en cada pausa natural del habla, mucho más
 // seguido que en Desktop. Esto genera "costuras" entre el final de una
-// sesión y el arranque de la siguiente, y justo ahí es donde a veces la
-// transcripción cambia una o dos palabras respecto a la sesión anterior.
+// sesión y el arranque de la siguiente. Además, si la sesión nueva arranca
+// antes de que el micrófono se libere del todo, a veces vuelve a "escuchar"
+// audio que la sesión anterior ya había procesado, produciendo frases
+// enteras duplicadas — por eso la ventana de solape ahora es más ancha
+// (40 palabras en vez de 12), para poder detectar y recortar también esos
+// duplicados largos, no solo el desfase de una o dos palabras.
 //
-// Paso 1 (comparación exacta) es el código original, sin tocar: en Desktop,
-// donde las sesiones casi no se reinician, este sigue siendo el único
-// camino que se ejecuta en la práctica.
+// Paso 1 (comparación exacta) es el código original: en Desktop, donde las
+// sesiones casi no se reinician, sigue siendo el único camino que se
+// ejecuta en la práctica.
 //
-// Paso 2 (fallback difuso) solo entra en juego cuando el exacto ya falló,
-// que en la práctica ocurre casi únicamente en el punto de costura en
-// móvil. Exige que la mayoría de la ventana coincida (umbral 70%), para no
+// Paso 2 (fallback difuso) solo entra en juego cuando el exacto ya falló.
+// Exige que la mayoría de la ventana coincida (umbral 70%), para no
 // confundir una repetición real del usuario con un solape de costura.
 function stripDictadoOverlap(existingText, newWordsArr) {
   const existingWords = existingText.trim().split(/\s+/).filter(Boolean).map(normalizeForOverlap);
   const newWordsNorm = newWordsArr.map(normalizeForOverlap);
-  const maxOverlap = Math.min(existingWords.length, newWordsNorm.length, 12);
+  const maxOverlap = Math.min(existingWords.length, newWordsNorm.length, 40);
 
   // Paso 1 — coincidencia exacta (comportamiento original).
   for (let len = maxOverlap; len > 0; len--) {
@@ -1383,8 +1386,18 @@ function createDictadoRecognition(sessionId) {
     if (dictadoActive && sessionId === dictadoSessionId) {
       dictadoSessionId++;
       const newSession = dictadoSessionId;
-      dictadoRecognition = createDictadoRecognition(newSession);
-      try { dictadoRecognition.start(); } catch(e) { stopDictado(); }
+      // Android no libera el micrófono al instante cuando continuous:true
+      // fuerza un reinicio; arrancar la sesión nueva de inmediato hace que
+      // a veces vuelva a "escuchar" audio que la sesión anterior ya
+      // procesó, produciendo frases largas duplicadas en loop. Este delay
+      // le da tiempo al audio track de soltarse antes de reabrirlo.
+      // En Desktop este handler casi nunca dispara (la sesión se mantiene
+      // larga), así que el delay no tiene efecto práctico ahí.
+      setTimeout(() => {
+        if (!dictadoActive || newSession !== dictadoSessionId) return;
+        dictadoRecognition = createDictadoRecognition(newSession);
+        try { dictadoRecognition.start(); } catch (e) { stopDictado(); }
+      }, 300);
     }
   };
 
