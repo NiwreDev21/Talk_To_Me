@@ -5,6 +5,7 @@ const ASSETS = [
   '/style.css',
   '/app.js',
   '/gemini-live.js',
+  '/ai-tutor.js',
   '/manifest.json'
 ];
 self.addEventListener('install', e => {
